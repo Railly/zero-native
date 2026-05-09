@@ -67,6 +67,7 @@ pub const RawWindow = struct {
     height: f32 = 480,
     x: ?f32 = null,
     y: ?f32 = null,
+    resizable: bool = true,
     restore_state: bool = true,
     frameless: bool = false,
     transparent: bool = false,
