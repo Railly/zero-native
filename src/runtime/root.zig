@@ -585,6 +585,8 @@ pub const Runtime = struct {
             self.closeWindowFromJson(request.payload, result_buffer) catch |err| return bridge.writeErrorResponse(response_buffer, request.id, .internal_error, builtinBridgeErrorMessage(err))
         else if (std.mem.eql(u8, request.command, "zero-native.window.move"))
             self.moveWindowFromJson(request.payload, source_window_id, result_buffer) catch |err| return bridge.writeErrorResponse(response_buffer, request.id, .internal_error, builtinBridgeErrorMessage(err))
+        else if (std.mem.eql(u8, request.command, "zero-native.window.resize"))
+            self.resizeWindowFromJson(request.payload, source_window_id, result_buffer) catch |err| return bridge.writeErrorResponse(response_buffer, request.id, .internal_error, builtinBridgeErrorMessage(err))
         else
             return bridge.writeErrorResponse(response_buffer, request.id, .unknown_command, "Unknown window command");
         return bridge.writeSuccessResponse(response_buffer, request.id, result);
@@ -742,6 +744,32 @@ pub const Runtime = struct {
         const result = try self.options.platform.services.moveWindow(window_id, dx, dy, clamp);
         const index = self.findWindowIndexById(window_id) orelse return error.WindowNotFound;
         return writeMoveResultJson(self.windows[index].info, result, output);
+    }
+
+    fn resizeWindowFromJson(self: *Runtime, payload: []const u8, source_window_id: platform.WindowId, output: []u8) ![]const u8 {
+        var storage = json.StringStorage.init(output);
+        const window_id = self.resolveWindowSelector(payload, &storage) catch source_window_id;
+        const width = jsonNumberField(payload, "width") orelse return error.MissingDimension;
+        const height = jsonNumberField(payload, "height") orelse return error.MissingDimension;
+        const anchor = parseResizeAnchor(payload) orelse .top_left;
+        try self.options.platform.services.resizeWindow(window_id, width, height, anchor);
+        const index = self.findWindowIndexById(window_id) orelse return error.WindowNotFound;
+        var info = self.windows[index].info;
+        info.frame.width = @floatCast(width);
+        info.frame.height = @floatCast(height);
+        self.windows[index].info = info;
+        return writeWindowJson(info, output);
+    }
+
+    fn parseResizeAnchor(payload: []const u8) ?platform.ResizeAnchor {
+        var storage_buf: [32]u8 = undefined;
+        var storage = json.StringStorage.init(&storage_buf);
+        const value = jsonStringField(payload, "anchor", &storage) orelse return null;
+        if (std.mem.eql(u8, value, "center")) return .center;
+        if (std.mem.eql(u8, value, "bottom-left") or std.mem.eql(u8, value, "bottomLeft")) return .bottom_left;
+        if (std.mem.eql(u8, value, "bottom-right") or std.mem.eql(u8, value, "bottomRight")) return .bottom_right;
+        if (std.mem.eql(u8, value, "top-left") or std.mem.eql(u8, value, "topLeft")) return .top_left;
+        return null;
     }
 
     fn resolveWindowSelector(self: *Runtime, payload: []const u8, storage: *json.StringStorage) !platform.WindowId {
@@ -1198,6 +1226,37 @@ test "runtime window.move defaults to source window when payload omits selector"
     try std.testing.expect(std.mem.indexOf(u8, response, "\"id\":2") != null);
     try std.testing.expect(std.mem.indexOf(u8, response, "\"hitX\":false") != null);
     try std.testing.expect(std.mem.indexOf(u8, response, "\"hitY\":false") != null);
+}
+
+test "runtime window.resize updates window dimensions and forwards anchor" {
+    const TestApp = struct {
+        fn app(self: *@This()) App {
+            return .{ .context = self, .name = "window-resize", .source = platform.WebViewSource.html("<p>Resize</p>") };
+        }
+    };
+
+    var harness: TestHarness() = undefined;
+    harness.init(.{});
+    harness.runtime.options.js_window_api = true;
+    var app_state: TestApp = .{};
+    try harness.start(app_state.app());
+
+    try harness.runtime.dispatchPlatformEvent(app_state.app(), .{ .bridge_message = .{
+        .bytes = "{\"id\":\"1\",\"command\":\"zero-native.window.create\",\"payload\":{\"label\":\"floater\",\"width\":120,\"height\":120}}",
+        .origin = "zero://inline",
+        .window_id = 1,
+    } });
+
+    try harness.runtime.dispatchPlatformEvent(app_state.app(), .{ .bridge_message = .{
+        .bytes = "{\"id\":\"2\",\"command\":\"zero-native.window.resize\",\"payload\":{\"label\":\"floater\",\"width\":480,\"height\":420,\"anchor\":\"center\"}}",
+        .origin = "zero://inline",
+        .window_id = 1,
+    } });
+    const response = harness.null_platform.lastBridgeResponse();
+    try std.testing.expect(std.mem.indexOf(u8, response, "\"ok\":true") != null);
+    try std.testing.expect(std.mem.indexOf(u8, response, "\"width\":480") != null);
+    try std.testing.expect(std.mem.indexOf(u8, response, "\"height\":420") != null);
+    try std.testing.expect(harness.null_platform.last_resize_anchor == .center);
 }
 
 test "runtime window.move propagates clamp flag and hit results" {

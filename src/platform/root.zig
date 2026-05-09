@@ -84,6 +84,13 @@ pub const MoveResult = struct {
     hit_y: bool = false,
 };
 
+pub const ResizeAnchor = enum {
+    top_left,
+    center,
+    bottom_left,
+    bottom_right,
+};
+
 pub const WindowState = struct {
     id: WindowId = 1,
     label: []const u8 = "main",
@@ -297,6 +304,7 @@ pub const PlatformServices = struct {
     focus_window_fn: ?*const fn (context: ?*anyopaque, window_id: WindowId) anyerror!void = null,
     close_window_fn: ?*const fn (context: ?*anyopaque, window_id: WindowId) anyerror!void = null,
     move_window_fn: ?*const fn (context: ?*anyopaque, window_id: WindowId, dx: f64, dy: f64, clamp_to_visible_frame: bool) anyerror!MoveResult = null,
+    resize_window_fn: ?*const fn (context: ?*anyopaque, window_id: WindowId, width: f64, height: f64, anchor: ResizeAnchor) anyerror!void = null,
     show_open_dialog_fn: ?*const fn (context: ?*anyopaque, options: OpenDialogOptions, buffer: []u8) anyerror!OpenDialogResult = null,
     show_save_dialog_fn: ?*const fn (context: ?*anyopaque, options: SaveDialogOptions, buffer: []u8) anyerror!?[]const u8 = null,
     show_message_dialog_fn: ?*const fn (context: ?*anyopaque, options: MessageDialogOptions) anyerror!MessageDialogResult = null,
@@ -358,6 +366,11 @@ pub const PlatformServices = struct {
     pub fn moveWindow(self: PlatformServices, window_id: WindowId, dx: f64, dy: f64, clamp_to_visible_frame: bool) anyerror!MoveResult {
         const move_fn = self.move_window_fn orelse return error.UnsupportedService;
         return move_fn(self.context, window_id, dx, dy, clamp_to_visible_frame);
+    }
+
+    pub fn resizeWindow(self: PlatformServices, window_id: WindowId, width: f64, height: f64, anchor: ResizeAnchor) anyerror!void {
+        const resize_fn = self.resize_window_fn orelse return error.UnsupportedService;
+        return resize_fn(self.context, window_id, width, height, anchor);
     }
 
     pub fn showOpenDialog(self: PlatformServices, options: OpenDialogOptions, buffer: []u8) anyerror!OpenDialogResult {
@@ -441,6 +454,7 @@ pub const NullPlatform = struct {
     clamp_x_on_move: bool = false,
     clamp_y_on_move: bool = false,
     last_move_clamp: bool = false,
+    last_resize_anchor: ResizeAnchor = .top_left,
 
     pub fn init(surface_value: Surface) NullPlatform {
         return .{ .surface_value = surface_value };
@@ -470,6 +484,7 @@ pub const NullPlatform = struct {
                 .focus_window_fn = focusWindow,
                 .close_window_fn = closeWindow,
                 .move_window_fn = moveWindow,
+                .resize_window_fn = resizeWindow,
                 .configure_security_policy_fn = configureSecurityPolicy,
                 .emit_window_event_fn = emitWindowEvent,
             },
@@ -586,6 +601,16 @@ pub const NullPlatform = struct {
             .hit_x = clamp_to_visible_frame and self.clamp_x_on_move,
             .hit_y = clamp_to_visible_frame and self.clamp_y_on_move,
         };
+    }
+
+    fn resizeWindow(context: ?*anyopaque, window_id: WindowId, width: f64, height: f64, anchor: ResizeAnchor) anyerror!void {
+        const self: *NullPlatform = @ptrCast(@alignCast(context.?));
+        self.last_resize_anchor = anchor;
+        const index = self.findWindowIndex(window_id) orelse return error.WindowNotFound;
+        var frame = self.windows[index].frame;
+        frame.width = @floatCast(width);
+        frame.height = @floatCast(height);
+        self.windows[index].frame = frame;
     }
 
     fn configureSecurityPolicy(context: ?*anyopaque, policy: security.Policy) anyerror!void {

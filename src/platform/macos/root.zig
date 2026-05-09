@@ -52,6 +52,7 @@ extern fn zero_native_appkit_create_window(host: *AppKitHost, window_id: u64, wi
 extern fn zero_native_appkit_focus_window(host: *AppKitHost, window_id: u64) c_int;
 extern fn zero_native_appkit_close_window(host: *AppKitHost, window_id: u64) c_int;
 extern fn zero_native_appkit_move_window(host: *AppKitHost, window_id: u64, dx: f64, dy: f64, clamp_to_visible_frame: c_int, out_hit_x: *c_int, out_hit_y: *c_int) c_int;
+extern fn zero_native_appkit_resize_window(host: *AppKitHost, window_id: u64, width: f64, height: f64, anchor: c_int) c_int;
 extern fn zero_native_appkit_clipboard_read(host: *AppKitHost, buffer: [*]u8, buffer_len: usize) usize;
 extern fn zero_native_appkit_clipboard_write(host: *AppKitHost, text: [*]const u8, text_len: usize) void;
 
@@ -162,6 +163,7 @@ pub const MacPlatform = struct {
                 .focus_window_fn = focusWindow,
                 .close_window_fn = closeWindow,
                 .move_window_fn = moveWindow,
+                .resize_window_fn = resizeWindow,
                 .show_open_dialog_fn = showOpenDialog,
                 .show_save_dialog_fn = showSaveDialog,
                 .show_message_dialog_fn = showMessageDialog,
@@ -333,6 +335,17 @@ fn focusWindow(context: ?*anyopaque, window_id: platform_mod.WindowId) anyerror!
 fn closeWindow(context: ?*anyopaque, window_id: platform_mod.WindowId) anyerror!void {
     const self: *MacPlatform = @ptrCast(@alignCast(context.?));
     if (zero_native_appkit_close_window(self.host, window_id) == 0) return error.CloseFailed;
+}
+
+fn resizeWindow(context: ?*anyopaque, window_id: platform_mod.WindowId, width: f64, height: f64, anchor: platform_mod.ResizeAnchor) anyerror!void {
+    const self: *MacPlatform = @ptrCast(@alignCast(context.?));
+    const anchor_int: c_int = switch (anchor) {
+        .top_left => 0,
+        .center => 1,
+        .bottom_left => 2,
+        .bottom_right => 3,
+    };
+    if (zero_native_appkit_resize_window(self.host, window_id, width, height, anchor_int) == 0) return error.ResizeFailed;
 }
 
 fn moveWindow(context: ?*anyopaque, window_id: platform_mod.WindowId, dx: f64, dy: f64, clamp_to_visible_frame: bool) anyerror!platform_mod.MoveResult {

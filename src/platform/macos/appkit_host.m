@@ -18,6 +18,21 @@ static NSArray<NSString *> *ZeroNativePolicyListFromBytes(const char *bytes, siz
 static NSString *ZeroNativeOriginForURL(NSURL *url);
 static BOOL ZeroNativePolicyListMatches(NSArray<NSString *> *values, NSURL *url);
 
+@interface ZeroNativeBorderlessWindow : NSWindow
+@end
+
+@implementation ZeroNativeBorderlessWindow
+
+- (BOOL)canBecomeKeyWindow {
+    return YES;
+}
+
+- (BOOL)canBecomeMainWindow {
+    return YES;
+}
+
+@end
+
 @interface ZeroNativeWindowDelegate : NSObject <NSWindowDelegate>
 @property(nonatomic, assign) ZeroNativeAppKitHost *host;
 @property(nonatomic, assign) uint64_t windowId;
@@ -245,10 +260,11 @@ static BOOL ZeroNativePolicyListMatches(NSArray<NSString *> *values, NSURL *url)
            NSWindowStyleMaskClosable |
            NSWindowStyleMaskResizable |
            NSWindowStyleMaskMiniaturizable);
-    NSWindow *window = [[NSWindow alloc] initWithContentRect:rect
-                                                   styleMask:styleMask
-                                                     backing:NSBackingStoreBuffered
-                                                       defer:NO];
+    Class windowClass = frameless ? [ZeroNativeBorderlessWindow class] : [NSWindow class];
+    NSWindow *window = [[windowClass alloc] initWithContentRect:rect
+                                                      styleMask:styleMask
+                                                        backing:NSBackingStoreBuffered
+                                                          defer:NO];
     [window setTitle:(title.length > 0 ? title : self.appName)];
     if (frameless) {
         [window setMovableByWindowBackground:YES];
@@ -945,6 +961,39 @@ int zero_native_appkit_close_window(zero_native_appkit_host_t *host, uint64_t wi
     ZeroNativeAppKitHost *object = (__bridge ZeroNativeAppKitHost *)host;
     if (!object.windows[@(window_id)]) return 0;
     [object closeWindowWithId:window_id];
+    return 1;
+}
+
+int zero_native_appkit_resize_window(zero_native_appkit_host_t *host, uint64_t window_id, double width, double height, int anchor) {
+    ZeroNativeAppKitHost *object = (__bridge ZeroNativeAppKitHost *)host;
+    NSWindow *window = object.windows[@(window_id)];
+    if (!window) return 0;
+    NSRect frame = window.frame;
+    NSPoint anchorPoint = NSMakePoint(frame.origin.x, frame.origin.y);
+    switch (anchor) {
+        case 1: { // center
+            double cx = frame.origin.x + frame.size.width / 2.0;
+            double cy = frame.origin.y + frame.size.height / 2.0;
+            anchorPoint = NSMakePoint(cx - width / 2.0, cy - height / 2.0);
+            break;
+        }
+        case 2: { // bottom-left (Cocoa default)
+            anchorPoint = frame.origin;
+            break;
+        }
+        case 3: { // bottom-right
+            anchorPoint = NSMakePoint(frame.origin.x + frame.size.width - width, frame.origin.y);
+            break;
+        }
+        case 0:
+        default: { // top-left visually (Cocoa Y-flipped, so adjust origin.y up)
+            double topY = frame.origin.y + frame.size.height;
+            anchorPoint = NSMakePoint(frame.origin.x, topY - height);
+            break;
+        }
+    }
+    NSRect newFrame = NSMakeRect(anchorPoint.x, anchorPoint.y, width, height);
+    [window setFrame:newFrame display:YES animate:NO];
     return 1;
 }
 

@@ -49,6 +49,7 @@ void zero_native_appkit_set_security_policy(zero_native_appkit_host_t *host, con
 int zero_native_appkit_create_window(zero_native_appkit_host_t *host, uint64_t window_id, const char *window_title, size_t window_title_len, const char *window_label, size_t window_label_len, double x, double y, double width, double height, int restore_frame, int frameless, int transparent, int always_on_top);
 int zero_native_appkit_focus_window(zero_native_appkit_host_t *host, uint64_t window_id);
 int zero_native_appkit_move_window(zero_native_appkit_host_t *host, uint64_t window_id, double dx, double dy, int clamp_to_visible_frame, int *out_hit_x, int *out_hit_y);
+int zero_native_appkit_resize_window(zero_native_appkit_host_t *host, uint64_t window_id, double width, double height, int anchor);
 int zero_native_appkit_close_window(zero_native_appkit_host_t *host, uint64_t window_id);
 size_t zero_native_appkit_clipboard_read(zero_native_appkit_host_t *host, char *buffer, size_t buffer_len);
 void zero_native_appkit_clipboard_write(zero_native_appkit_host_t *host, const char *text, size_t text_len);
