@@ -80,6 +80,7 @@ const builtin_policies = [_]zero_native.BridgeCommandPolicy{
     .{ .name = "zero-native.window.create", .permissions = &window_permission, .origins = &example_origins },
     .{ .name = "zero-native.window.focus", .permissions = &window_permission, .origins = &example_origins },
     .{ .name = "zero-native.window.close", .permissions = &window_permission, .origins = &example_origins },
+    .{ .name = "zero-native.window.move", .permissions = &window_permission, .origins = &example_origins },
 };
 
 const WebViewApp = struct {
