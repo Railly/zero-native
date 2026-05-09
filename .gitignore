@@ -16,3 +16,5 @@ third_party/cef/linux/
 
 # TypeScript build info (generated)
 docs/tsconfig.tsbuildinfo
+examples/*/third_party/cef/
+third_party/cef/

@@ -338,11 +338,11 @@ static const char *ZeroNativeCefBridgeScript() {
 @property(nonatomic, strong) NSArray<NSString *> *allowedNavigationOrigins;
 @property(nonatomic, strong) NSArray<NSString *> *allowedExternalURLs;
 @property(nonatomic, assign) NSInteger externalLinkAction;
-- (instancetype)initWithAppName:(NSString *)appName title:(NSString *)title width:(double)width height:(double)height frameless:(BOOL)frameless transparent:(BOOL)transparent alwaysOnTop:(BOOL)alwaysOnTop;
+- (instancetype)initWithAppName:(NSString *)appName title:(NSString *)title width:(double)width height:(double)height frameless:(BOOL)frameless transparent:(BOOL)transparent alwaysOnTop:(BOOL)alwaysOnTop focusable:(BOOL)focusable;
 - (void)configureApplication;
 - (void)buildMenuBar;
 - (NSMenuItem *)menuItem:(NSString *)title action:(SEL)action key:(NSString *)key modifiers:(NSEventModifierFlags)modifiers;
-- (BOOL)createWindowWithId:(uint64_t)windowId title:(NSString *)title label:(NSString *)label x:(double)x y:(double)y width:(double)width height:(double)height restoreFrame:(BOOL)restoreFrame frameless:(BOOL)frameless transparent:(BOOL)transparent alwaysOnTop:(BOOL)alwaysOnTop makeMain:(BOOL)makeMain;
+- (BOOL)createWindowWithId:(uint64_t)windowId title:(NSString *)title label:(NSString *)label x:(double)x y:(double)y width:(double)width height:(double)height restoreFrame:(BOOL)restoreFrame frameless:(BOOL)frameless transparent:(BOOL)transparent alwaysOnTop:(BOOL)alwaysOnTop focusable:(BOOL)focusable makeMain:(BOOL)makeMain;
 - (void)focusWindowWithId:(uint64_t)windowId;
 - (void)closeWindowWithId:(uint64_t)windowId;
 - (void)runWithCallback:(zero_native_appkit_event_callback_t)callback context:(void *)context;
@@ -410,7 +410,7 @@ static const char *ZeroNativeCefBridgeScript() {
 
 @implementation ZeroNativeChromiumHost
 
-- (instancetype)initWithAppName:(NSString *)appName title:(NSString *)title width:(double)width height:(double)height frameless:(BOOL)frameless transparent:(BOOL)transparent alwaysOnTop:(BOOL)alwaysOnTop {
+- (instancetype)initWithAppName:(NSString *)appName title:(NSString *)title width:(double)width height:(double)height frameless:(BOOL)frameless transparent:(BOOL)transparent alwaysOnTop:(BOOL)alwaysOnTop focusable:(BOOL)focusable {
     self = [super init];
     if (!self) return nil;
 
@@ -432,7 +432,7 @@ static const char *ZeroNativeCefBridgeScript() {
     self.allowedExternalURLs = @[];
     self.externalLinkAction = 0;
 
-    [self createWindowWithId:1 title:(title.length > 0 ? title : self.appName) label:@"main" x:0 y:0 width:width height:height restoreFrame:NO frameless:frameless transparent:transparent alwaysOnTop:alwaysOnTop makeMain:YES];
+    [self createWindowWithId:1 title:(title.length > 0 ? title : self.appName) label:@"main" x:0 y:0 width:width height:height restoreFrame:NO frameless:frameless transparent:transparent alwaysOnTop:alwaysOnTop focusable:focusable makeMain:YES];
     self.didShutdown = NO;
     return self;
 }
@@ -521,7 +521,8 @@ static const char *ZeroNativeCefBridgeScript() {
     delete self.browsers;
 }
 
-- (BOOL)createWindowWithId:(uint64_t)windowId title:(NSString *)title label:(NSString *)label x:(double)x y:(double)y width:(double)width height:(double)height restoreFrame:(BOOL)restoreFrame frameless:(BOOL)frameless transparent:(BOOL)transparent alwaysOnTop:(BOOL)alwaysOnTop makeMain:(BOOL)makeMain {
+- (BOOL)createWindowWithId:(uint64_t)windowId title:(NSString *)title label:(NSString *)label x:(double)x y:(double)y width:(double)width height:(double)height restoreFrame:(BOOL)restoreFrame frameless:(BOOL)frameless transparent:(BOOL)transparent alwaysOnTop:(BOOL)alwaysOnTop focusable:(BOOL)focusable makeMain:(BOOL)makeMain {
+    (void)focusable; // CEF backend keeps activating behavior; nonactivating panel needs more wiring.
     NSNumber *key = @(windowId);
     if (self.windows[key]) return NO;
 
@@ -951,7 +952,7 @@ static void ZeroNativeWarnUnsupportedFlags(int frameless, int transparent, int a
     }
 }
 
-zero_native_appkit_host_t *zero_native_appkit_create(const char *app_name, size_t app_name_len, const char *window_title, size_t window_title_len, const char *bundle_id, size_t bundle_id_len, const char *icon_path, size_t icon_path_len, const char *window_label, size_t window_label_len, double x, double y, double width, double height, int restore_frame, int frameless, int transparent, int always_on_top) {
+zero_native_appkit_host_t *zero_native_appkit_create(const char *app_name, size_t app_name_len, const char *window_title, size_t window_title_len, const char *bundle_id, size_t bundle_id_len, const char *icon_path, size_t icon_path_len, const char *window_label, size_t window_label_len, double x, double y, double width, double height, int restore_frame, int frameless, int transparent, int always_on_top, int focusable) {
     @autoreleasepool {
         (void)bundle_id;
         (void)bundle_id_len;
@@ -962,7 +963,7 @@ zero_native_appkit_host_t *zero_native_appkit_create(const char *app_name, size_
         ZeroNativeWarnUnsupportedFlags(frameless, transparent, always_on_top);
         NSString *appNameString = [[NSString alloc] initWithBytes:app_name length:app_name_len encoding:NSUTF8StringEncoding] ?: @"zero-native";
         NSString *titleString = [[NSString alloc] initWithBytes:window_title length:window_title_len encoding:NSUTF8StringEncoding] ?: appNameString;
-        ZeroNativeChromiumHost *host = [[ZeroNativeChromiumHost alloc] initWithAppName:appNameString title:titleString width:width height:height frameless:(frameless != 0) transparent:(transparent != 0) alwaysOnTop:(always_on_top != 0)];
+        ZeroNativeChromiumHost *host = [[ZeroNativeChromiumHost alloc] initWithAppName:appNameString title:titleString width:width height:height frameless:(frameless != 0) transparent:(transparent != 0) alwaysOnTop:(always_on_top != 0) focusable:(focusable != 0)];
         if (restore_frame) {
             [host.window setFrame:ZeroNativeConstrainFrame(NSMakeRect(x, y, width, height)) display:NO];
         }
@@ -1035,12 +1036,12 @@ void zero_native_appkit_set_security_policy(zero_native_appkit_host_t *host, con
     [object setAllowedNavigationOrigins:origins externalURLs:externalURLs externalAction:external_action];
 }
 
-int zero_native_appkit_create_window(zero_native_appkit_host_t *host, uint64_t window_id, const char *window_title, size_t window_title_len, const char *window_label, size_t window_label_len, double x, double y, double width, double height, int restore_frame, int frameless, int transparent, int always_on_top) {
+int zero_native_appkit_create_window(zero_native_appkit_host_t *host, uint64_t window_id, const char *window_title, size_t window_title_len, const char *window_label, size_t window_label_len, double x, double y, double width, double height, int restore_frame, int frameless, int transparent, int always_on_top, int focusable) {
     ZeroNativeChromiumHost *object = (__bridge ZeroNativeChromiumHost *)host;
     NSString *titleString = window_title ? [[NSString alloc] initWithBytes:window_title length:window_title_len encoding:NSUTF8StringEncoding] : @"zero-native";
     NSString *labelString = window_label ? [[NSString alloc] initWithBytes:window_label length:window_label_len encoding:NSUTF8StringEncoding] : @"";
     ZeroNativeWarnUnsupportedFlags(frameless, transparent, always_on_top);
-    return [object createWindowWithId:window_id title:titleString ?: @"zero-native" label:labelString ?: @"" x:x y:y width:width height:height restoreFrame:(restore_frame != 0) frameless:(frameless != 0) transparent:(transparent != 0) alwaysOnTop:(always_on_top != 0) makeMain:NO] ? 1 : 0;
+    return [object createWindowWithId:window_id title:titleString ?: @"zero-native" label:labelString ?: @"" x:x y:y width:width height:height restoreFrame:(restore_frame != 0) frameless:(frameless != 0) transparent:(transparent != 0) alwaysOnTop:(always_on_top != 0) focusable:(focusable != 0) makeMain:NO] ? 1 : 0;
 }
 
 int zero_native_appkit_focus_window(zero_native_appkit_host_t *host, uint64_t window_id) {
@@ -1085,6 +1086,39 @@ int zero_native_appkit_move_window(zero_native_appkit_host_t *host, uint64_t win
     [window setFrameOrigin:NSMakePoint(newX, newY)];
     if (out_hit_x) *out_hit_x = hitX;
     if (out_hit_y) *out_hit_y = hitY;
+    return 1;
+}
+
+int zero_native_appkit_resize_window(zero_native_appkit_host_t *host, uint64_t window_id, double width, double height, int anchor) {
+    ZeroNativeChromiumHost *object = (__bridge ZeroNativeChromiumHost *)host;
+    NSWindow *window = object.windows[@(window_id)];
+    if (!window) return 0;
+    NSRect frame = window.frame;
+    NSPoint anchorPoint = NSMakePoint(frame.origin.x, frame.origin.y);
+    switch (anchor) {
+        case 1: { // center
+            double cx = frame.origin.x + frame.size.width / 2.0;
+            double cy = frame.origin.y + frame.size.height / 2.0;
+            anchorPoint = NSMakePoint(cx - width / 2.0, cy - height / 2.0);
+            break;
+        }
+        case 2: { // bottom-left (Cocoa default)
+            anchorPoint = frame.origin;
+            break;
+        }
+        case 3: { // bottom-right
+            anchorPoint = NSMakePoint(frame.origin.x + frame.size.width - width, frame.origin.y);
+            break;
+        }
+        case 0:
+        default: { // top-left visually (Cocoa Y-flipped, so adjust origin.y up)
+            double topY = frame.origin.y + frame.size.height;
+            anchorPoint = NSMakePoint(frame.origin.x, topY - height);
+            break;
+        }
+    }
+    NSRect newFrame = NSMakeRect(anchorPoint.x, anchorPoint.y, width, height);
+    [window setFrame:newFrame display:YES animate:NO];
     return 1;
 }
 

@@ -94,6 +94,7 @@ pub const WindowMetadata = struct {
     frameless: bool = false,
     transparent: bool = false,
     always_on_top: bool = false,
+    focusable: bool = true,
 };
 
 pub const FrontendDevMetadata = struct {
@@ -276,6 +277,7 @@ fn convertRawWindows(allocator: std.mem.Allocator, windows: []const RawWindow) !
             .frameless = window.frameless,
             .transparent = window.transparent,
             .always_on_top = window.always_on_top,
+            .focusable = window.focusable,
         };
     }
     return converted;
@@ -351,6 +353,7 @@ fn convertWindows(allocator: std.mem.Allocator, windows: []const WindowMetadata)
             .frameless = window.frameless,
             .transparent = window.transparent,
             .always_on_top = window.always_on_top,
+            .focusable = window.focusable,
         };
     }
     return converted;

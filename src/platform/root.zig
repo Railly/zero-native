@@ -73,6 +73,7 @@ pub const WindowOptions = struct {
     frameless: bool = false,
     transparent: bool = false,
     always_on_top: bool = false,
+    focusable: bool = true,
 
     pub fn resolvedTitle(self: WindowOptions, app_name: []const u8) []const u8 {
         return if (self.title.len > 0) self.title else app_name;
@@ -136,6 +137,7 @@ pub const WindowCreateOptions = struct {
     frameless: bool = false,
     transparent: bool = false,
     always_on_top: bool = false,
+    focusable: bool = true,
     source: ?WebViewSource = null,
 
     pub fn windowOptions(self: WindowCreateOptions, id: WindowId, label: []const u8) WindowOptions {
@@ -150,6 +152,7 @@ pub const WindowCreateOptions = struct {
             .frameless = self.frameless,
             .transparent = self.transparent,
             .always_on_top = self.always_on_top,
+            .focusable = self.focusable,
         };
     }
 };

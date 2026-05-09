@@ -71,4 +71,5 @@ pub const RawWindow = struct {
     frameless: bool = false,
     transparent: bool = false,
     always_on_top: bool = false,
+    focusable: bool = true,
 };
