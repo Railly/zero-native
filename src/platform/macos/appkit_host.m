@@ -241,6 +241,18 @@ static BOOL ZeroNativePolicyListMatches(NSArray<NSString *> *values, NSURL *url)
     [NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];
     self.appName = appName.length > 0 ? appName : @"zero-native";
     self.bundleIdentifier = bundleIdentifier.length > 0 ? bundleIdentifier : @"dev.zero_native.app";
+
+    // Custom URL scheme handler. macOS dispatches URL launches via
+    // AppleEvents (kAEGetURL), not argv. We catch the event here and
+    // record the URL to ~/<bundle-id>/runtime/incoming-url.txt so the
+    // app can poll/read it. This survives both cold-start launches
+    // (event arrives early in the run loop, post-init) and warm
+    // re-launches (app already running, just gets a new event).
+    [[NSAppleEventManager sharedAppleEventManager]
+        setEventHandler:self
+            andSelector:@selector(handleGetURLEvent:withReplyEvent:)
+          forEventClass:kInternetEventClass
+             andEventID:kAEGetURL];
     self.iconPath = iconPath ?: @"";
     self.windowLabel = windowLabel.length > 0 ? windowLabel : @"main";
     self.windows = [[NSMutableDictionary alloc] init];
@@ -258,6 +270,40 @@ static BOOL ZeroNativePolicyListMatches(NSArray<NSString *> *values, NSURL *url)
     self.didShutdown = NO;
 
     return self;
+}
+
+// AppleEvent handler invoked by macOS when the user opens a custom-scheme
+// URL registered in Info.plist (e.g. `petdex://kebo`). The system runs
+// this for both cold-start launches and warm re-launches of an
+// already-running app. We persist the URL to a runtime file so the
+// app can read + act on it without exposing the AppleEvent API to
+// downstream zig code. The path is per-bundle: ~/<bundle-id>/runtime/
+// incoming-url.txt — so each zero-native app gets its own slot.
+- (void)handleGetURLEvent:(NSAppleEventDescriptor *)event withReplyEvent:(NSAppleEventDescriptor *)reply {
+    NSString *url = [[event paramDescriptorForKeyword:keyDirectObject] stringValue];
+    if (url.length == 0) return;
+
+    NSString *home = NSHomeDirectory();
+    if (home.length == 0) return;
+    // Bundle-id-derived runtime dir. Petdex uses `run.crafter.petdex-desktop`
+    // → `~/.run.crafter.petdex-desktop/runtime/incoming-url.txt`. To avoid
+    // surprising users with a leading dot for every dotted bundle id, we
+    // pull the LAST segment after the final dot. So `petdex-desktop` →
+    // `~/.petdex-desktop/runtime/incoming-url.txt`. Apps that prefer a
+    // different layout can read this file early and move it.
+    NSString *bundleSegment = self.bundleIdentifier;
+    NSRange lastDot = [bundleSegment rangeOfString:@"." options:NSBackwardsSearch];
+    if (lastDot.location != NSNotFound) {
+        bundleSegment = [bundleSegment substringFromIndex:lastDot.location + 1];
+    }
+    if (bundleSegment.length == 0) return;
+    NSString *runtimeDir = [NSString stringWithFormat:@"%@/.%@/runtime", home, bundleSegment];
+    [[NSFileManager defaultManager] createDirectoryAtPath:runtimeDir
+                              withIntermediateDirectories:YES
+                                               attributes:nil
+                                                    error:nil];
+    NSString *target = [runtimeDir stringByAppendingPathComponent:@"incoming-url.txt"];
+    [url writeToFile:target atomically:YES encoding:NSUTF8StringEncoding error:nil];
 }
 
 - (BOOL)createWindowWithId:(uint64_t)windowId title:(NSString *)title label:(NSString *)label x:(double)x y:(double)y width:(double)width height:(double)height restoreFrame:(BOOL)restoreFrame frameless:(BOOL)frameless transparent:(BOOL)transparent alwaysOnTop:(BOOL)alwaysOnTop focusable:(BOOL)focusable makeMain:(BOOL)makeMain {
