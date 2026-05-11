@@ -38,8 +38,15 @@ static BOOL ZeroNativePolicyListMatches(NSArray<NSString *> *values, NSURL *url)
 
 @implementation ZeroNativeNonactivatingPanel
 
+// canBecomeKeyWindow: YES is REQUIRED for embedded WKWebViews to
+// receive keyboard input — typing in an <input> field is silently
+// dropped otherwise. The panel still stays "nonactivating" because
+// NSWindowStyleMaskNonactivatingPanel keeps it from stealing focus
+// from other apps on click; it just lets text widgets inside the
+// webview do their job when the user clicks them. (Petdex's pet
+// picker has a search input that was unfocusable until this fix.)
 - (BOOL)canBecomeKeyWindow {
-    return NO;
+    return YES;
 }
 
 - (BOOL)canBecomeMainWindow {
